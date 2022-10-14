@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-docarray = "0.17.0"
+docarray = {extras = ["redis"], version = "^0.17.0"}
 pytest = "6.2.4"
 pydub = "^0.25.1"
 datasets = {extras = ["audio"], version = "^2.5.2"}

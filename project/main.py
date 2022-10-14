@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from worker import train_embedding
+from worker import create_task, add_docs
 
 
 app = FastAPI()
@@ -18,10 +18,17 @@ def home(request: Request):
     return templates.TemplateResponse("home.html", context={"request": request})
 
 
-@app.post("/tasks", status_code=201)
+@app.post("/tasks/dummy", status_code=201)
 def run_task(payload = Body(...)):
-    task_type = payload["uri"]
-    task = train_embedding.delay(uri)
+    task_type = payload["type"]
+    task = create_task.delay(int(task_type))
+    return JSONResponse({"task_id": task.id})
+
+
+@app.post("/tasks/add_docs", status_code=201)
+def run_task(payload = Body(...)):
+    docs = payload["docs"]
+    task = create_task.delay(docs)
     return JSONResponse({"task_id": task.id})
 
 

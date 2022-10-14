@@ -11,11 +11,11 @@ STORE_CONF = {'host': os.getenv('DOCARRAY_STORAGE_HOST'),
 
 
 def _extend_docstore(storage: str, config: dict, docs_kwargs: List[dict]):
-    with DocumentArray(storage, config) as da:
+    with DocumentArray(storage=storage, config=config) as da:
         da.extend([Document(**kwargs) for kwargs in docs_kwargs])
         return len(da)
 
-def _add_docs(uris: List[str], labels: List[str], n_dim: int, storage: str = STORAGE, config: dict = STORE_CONF):
+def add_docs(uris: List[str], labels: List[str], n_dim: int, storage: str = STORAGE, config: dict = STORE_CONF):
     assert len(uris) == len(labels)
     config['n_dim'] = n_dim
     metadata = [{'label': l} for l in labels]
@@ -24,12 +24,12 @@ def _add_docs(uris: List[str], labels: List[str], n_dim: int, storage: str = STO
 
 def _get_doc_by_uri(uri: str, n_dim: int, storage: str = STORAGE, config: dict = STORE_CONF):
     config['n_dim'] = n_dim
-    with DocumentArray(storage, config) as da:
+    with DocumentArray(storage=storage, config=config) as da:
         return da.find({'uri': {'$eq': uri}})
 
 def _get_array_by_uris(uris: List[str], n_dim: int, storage: str = STORAGE, config: dict = STORE_CONF):
     config['n_dim'] = n_dim
-    with DocumentArray(storage, config) as da:
+    with DocumentArray(storage=storage, config=config) as da:
         return da.find({'uri': {'$in': uris}})
 
 def _doc_audio_to_tensor(doc: Document, in_sr: int = 8000, out_sr: int = 16000) -> Document:

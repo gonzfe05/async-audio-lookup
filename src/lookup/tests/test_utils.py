@@ -1,12 +1,12 @@
 import pytest
-from lookup.doc_utils import _extend_docstore, _add_docs, _get_doc_by_uri, Document, _get_array_by_uris, _doc_audio_to_tensor, DocumentArray, _array_audio_to_tensor, _iter_audio_batch
+from lookup.doc_utils import _extend_docstore, add_docs, _get_doc_by_uri, Document, _get_array_by_uris, _doc_audio_to_tensor, DocumentArray, _array_audio_to_tensor, _iter_audio_batch
 from pydub import AudioSegment
 from pydub.generators import WhiteNoise
 import numpy as np
 from numpy.testing import assert_array_equal, assert_raises
 
 class mockArray(object):
-    def __init__(self, *kwargs) -> None:
+    def __init__(self, storage=None, config=None, *kwargs) -> None:
         self.kwargs = kwargs
         self.array = []
     
@@ -38,7 +38,7 @@ def test_add_doc(mocker):
     mock = mocker.patch('lookup.doc_utils._extend_docstore', return_value=None)
     uris = ['1.wav', '2.wav']
     labels = ['a', 'b']
-    _ = _add_docs(uris, labels, 512, 'redis', {'example': 1})
+    _ = add_docs(uris, labels, 512, 'redis', {'example': 1})
     mock.assert_called_once_with('redis',
                                  {'example': 1, 'n_dim': 512},
                                  [{'uri': '1.wav', 'tags': {'label': 'a'}},

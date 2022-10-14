@@ -2,7 +2,7 @@ import json
 
 from unittest.mock import patch, call
 
-from worker import train_embedding
+from worker import create_task, add_docs
 
 
 def test_home(test_app):
@@ -10,27 +10,31 @@ def test_home(test_app):
     assert response.status_code == 200
 
 
-def test_task():
-    assert train_embedding.run(1)
-    assert train_embedding.run(2)
-    assert train_embedding.run(3)
+def test_create_task():
+    assert create_task.run(1)
+    assert create_task.run(2)
+    assert create_task.run(3)
+
+def test_add_docs():
+    assert add_docs.run([{'uri': 'a.wav', 'tags': {'label': 'a'}}]) == 1
+    assert add_docs.run([{'uri': 'b.wav', 'tags': {'label': 'b'}}, {'uri': 'c.wav', 'tags': {'label': 'c'}}]) == 3
 
 
 @patch("worker.create_task.run")
-def test_mock_task(mock_run):
-    assert train_embedding.run(1)
-    train_embedding.run.assert_called_once_with(1)
+def test_mock_create_task(mock_run):
+    assert create_task.run(1)
+    create_task.run.assert_called_once_with(1)
 
-    assert train_embedding.run(2)
-    assert train_embedding.run.call_count == 2
+    assert create_task.run(2)
+    assert create_task.run.call_count == 2
 
-    assert train_embedding.run(3)
-    assert train_embedding.run.call_count == 3
+    assert create_task.run(3)
+    assert create_task.run.call_count == 3
 
 
-def test_task_status(test_app):
+def test_create_task_status(test_app):
     response = test_app.post(
-        "/tasks",
+        "/tasks/dummy",
         data=json.dumps({"type": 1})
     )
     content = response.json()

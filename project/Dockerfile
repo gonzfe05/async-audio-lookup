@@ -12,6 +12,9 @@ ENV PYTHONUNBUFFERED 1
 RUN pip install --upgrade pip
 COPY ./requirements.txt .
 RUN pip install -r requirements.txt
-
+COPY ./dist/lookup-0.1.0-py3-none-any.whl .
+RUN pip install lookup-0.1.0-py3-none-any.whl
+RUN apt-get update && apt-get -y install libsndfile-dev
+RUN pip install --upgrade redis
 # copy project
 COPY . .
