@@ -1,0 +1,109 @@
+import pytest
+from lookup.doc_utils import _extend_docstore, _add_docs, _get_doc_by_uri, Document, _get_array_by_uris, _doc_audio_to_tensor, DocumentArray, _array_audio_to_tensor, _iter_audio_batch
+from pydub import AudioSegment
+from pydub.generators import WhiteNoise
+import numpy as np
+from numpy.testing import assert_array_equal, assert_raises
+
+class mockArray(object):
+    def __init__(self, *kwargs) -> None:
+        self.kwargs = kwargs
+        self.array = []
+    
+    def __enter__(self):
+        return mockArray(self.kwargs)
+    
+    def __exit__(self, *kwargs):
+        pass
+
+    def __len__(self):
+        return len(self.array)
+
+    def find(self, *kwargs):
+        return kwargs
+    
+    def extend(self, _list):
+        assert isinstance(_list, list)
+        assert all(isinstance(i, Document) for i in _list)
+        self.array.extend(_list)
+    
+
+def test_extend_docstore(mocker):
+    mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
+    docs = [{'uri': '1.wav'}, {'uri': '2.wav'}]
+    res = _extend_docstore('redis', {'example': 1}, docs)
+    assert res == 2
+
+def test_add_doc(mocker):
+    mock = mocker.patch('lookup.doc_utils._extend_docstore', return_value=None)
+    uris = ['1.wav', '2.wav']
+    labels = ['a', 'b']
+    _ = _add_docs(uris, labels, 512, 'redis', {'example': 1})
+    mock.assert_called_once_with('redis',
+                                 {'example': 1, 'n_dim': 512},
+                                 [{'uri': '1.wav', 'tags': {'label': 'a'}},
+                                 {'uri': '2.wav', 'tags': {'label': 'b'}}
+                                 ]
+                                )
+
+def test__get_doc_by_uri(mocker):
+    mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
+    res = _get_doc_by_uri('1.wav', 512, 'redis', {'a': 'b'})
+    assert res[0] == {'uri': {'$eq': '1.wav'}}
+
+def test__get_array_by_uris(mocker):
+    mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
+    res = _get_array_by_uris(['1.wav', '2.wav'], 512, 'redis', {'a': 'b'})
+    assert res[0] == {'uri': {'$in': ['1.wav', '2.wav']}}
+
+def test__doc_audio_to_tensor(tmp_path):
+    file_path = tmp_path / "1.wav"
+    audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
+    expected_array = np.array(audio_segment.get_array_of_samples()).T.astype(np.float32)
+    # Normalise float32 array so that values are between -1.0 and +1.0
+    max_int16 = 2**15
+    expected_array = expected_array / max_int16
+    audio_segment.export(file_path, format='wav')
+    assert file_path.exists()
+    doc = Document(uri=str(file_path))
+    loaded_doc = _doc_audio_to_tensor(doc, 8000, 8000)
+    assert_array_equal(expected_array, loaded_doc.tensor)
+    loaded_doc = _doc_audio_to_tensor(doc, 8000, 16000)
+    with assert_raises(AssertionError):
+        assert_array_equal(expected_array, loaded_doc.tensor)
+
+def test__array_audio_to_tensor(tmp_path):
+    expected_arrays = []
+    docs = []
+    for i in range(3):
+        file_path = tmp_path / f"{i}.wav"
+        audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
+        expected_array = np.array(audio_segment.get_array_of_samples()).T.astype(np.float32)
+        # Normalise float32 array so that values are between -1.0 and +1.0
+        max_int16 = 2**15
+        expected_arrays.append(expected_array / max_int16)
+        audio_segment.export(file_path, format='wav')
+        assert file_path.exists()
+        docs.append(Document(uri=str(file_path)))
+    doc_array = DocumentArray(docs)
+    loaded_docs = _array_audio_to_tensor(doc_array)
+    for arr, doc in zip(expected_arrays, loaded_docs):
+        assert_array_equal(arr, doc.tensor)
+
+def test__array_audio_to_tensor(tmp_path):
+    expected_arrays = []
+    docs = []
+    for i in range(3):
+        file_path = tmp_path / f"{i}.wav"
+        audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
+        expected_array = np.array(audio_segment.get_array_of_samples()).T.astype(np.float32)
+        # Normalise float32 array so that values are between -1.0 and +1.0
+        max_int16 = 2**15
+        expected_arrays.append(expected_array / max_int16)
+        audio_segment.export(file_path, format='wav')
+        assert file_path.exists()
+        docs.append(Document(uri=str(file_path)))
+    doc_array = DocumentArray(docs)
+    loaded_docs = _iter_audio_batch(doc_array, in_sr=8000, out_sr=8000, batch=2)
+    for arr, doc in zip(expected_arrays, loaded_docs):
+        assert_array_equal(arr, doc.tensor)
