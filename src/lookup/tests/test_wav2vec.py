@@ -5,9 +5,15 @@ from lookup.doc_utils import Document
 from lookup.wav2vec import DataCollatorCTCWithPadding, get_data_collator, load_trainer, load_w2v, w2v_data_loader
 from transformers import Wav2Vec2ForCTC
 from transformers import Trainer
-from torch import is_tensor
+# from torch import is_tensor
+
 
 def test_w2v_data_loader(tmp_path, mocker):
+    """
+    GIVEN a set of audios loaded into a docstore with their transcript and uris
+    WHEN w2v_data_loader is called for those uris
+    THEN we get a CustomDataset with 'labels' as the transcript and 'input_values' as the audio array
+    """
     uris = []
     for i in range(3):
         file_path = tmp_path / f"{i}.wav"
@@ -15,12 +21,14 @@ def test_w2v_data_loader(tmp_path, mocker):
         audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
         audio_segment.export(file_path, format='wav')
     labels = ['one thing', 'another', 'final']
-    mock_doc_array = lambda uris, n_dim: [Document(uri=i, tags={'label': labels[ix]}) for ix, i in enumerate(uris)]
+    def mock_doc_array(uris, n_dim):
+        return [Document(uri=i, tags={'label': labels[ix]}) for ix, i in enumerate(uris)]
+    
     mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc_array)
     dataset, _ = w2v_data_loader(uris, 512, 8000, 16000)
-    for d in dataset:
-        assert len(d['labels']) == len(d['text'])
-        assert d['input_values'].shape == d['audio']['array'].shape
+    for doc in dataset:
+        assert len(doc['labels']) == len(doc['text'])
+        assert doc['input_values'].shape == doc['audio']['array'].shape
 
 
 def test_load_w2v(mocker):
@@ -44,12 +52,20 @@ def test_load_trainer(mocker):
     assert isinstance(trainer, Trainer)
 
 def test_training_round(tmp_path, mocker):
+    """
+    GIVEN a dataset, collator, processor and model
+    WHEN load_trainer is called and its train() method called
+    THEN we can train the model
+    """
+    # Create a mock data of the same audio repeated
     file_path = tmp_path / "1.wav"
     uris = [file_path]*32
     audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1000)
     audio_segment.export(file_path, format='wav')
     labels = ['one thing']*32
-    mock_doc_array = lambda uris, n_dim: [Document(uri=i, tags={'label': labels[ix]}) for ix, i in enumerate(uris)]
+    def mock_doc_array(uris, n_dim):
+        return [Document(uri=i, tags={'label': labels[ix]}) for ix, i in enumerate(uris)]
+    # Create mock dataset by mocking the call to docstore
     mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc_array)
     dataset, processor = w2v_data_loader(uris, 512, 8000, 16000)
     model = load_w2v(processor)

@@ -1,4 +1,3 @@
-import re
 from typing import Callable, List
 import torch
 from torch.utils.data import Dataset
@@ -8,10 +7,10 @@ from lookup.doc_utils import _get_array_by_uris, _doc_audio_to_tensor
 CHARS_TO_EXCLUDE = ['/','_','.','-']
 
 class SegmentDataset(Dataset):
-    def __init__(self, uris: List[str], n_dim: int, in_sr: int, out_sr: int):
+    def __init__(self, uris: List[str], in_sr: int, out_sr: int):
         # super().__init__()
         self.uris = uris
-        self.doc_array = _get_array_by_uris(uris, n_dim)
+        self.doc_array = _get_array_by_uris(uris)
         self.unk_token = "[UNK]"
         self.pad_token = "[PAD]"
         self.word_delimiter_token = "|"
@@ -44,8 +43,8 @@ class SegmentDataset(Dataset):
         return vocab
 
 class CustomDataset(Dataset):
-    def __init__(self, uris: List[str], n_dim: int, in_sr: int, out_sr: int, preprocess_func: Callable):
-        self.segment_data = SegmentDataset(uris, n_dim, in_sr, out_sr)
+    def __init__(self, uris: List[str], in_sr: int, out_sr: int, preprocess_func: Callable):
+        self.segment_data = SegmentDataset(uris, in_sr, out_sr)
         self.vocab = self.segment_data.vocab
         self.preprocess_func = preprocess_func
 

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from functools import partial
 import json
 from typing import List
@@ -15,9 +15,22 @@ import numpy as np
 from datasets import load_metric
 
 
-def prepare_dataset(_input, processor):
-    audio = _input["audio"]
+def prepare_dataset(_input: dict, processor: Wav2Vec2Processor) -> dict:
+    """Process input and target values separately.
 
+    Parameters
+    ----------
+    _input : dict
+        Contains audio array key for input and text key for target.
+    processor : Wav2Vec2Processor
+        Prepares input array for wav2vec and text target for CTC
+
+    Returns
+    -------
+    dict
+        Processed input for wav2vecforctc
+    """
+    audio = _input["audio"]
     # batched output is "un-batched" to ensure mapping is correct
     _input["input_values"] = processor(audio["array"], sampling_rate=audio["sampling_rate"]).input_values[0]
     
@@ -25,18 +38,36 @@ def prepare_dataset(_input, processor):
         _input["labels"] = processor(_input["text"]).input_ids
     return _input
 
-def w2v_data_loader(uris: List[str], ndim, in_sr, out_sr):
-    segment_dataset = SegmentDataset(uris, ndim, in_sr, out_sr)
+def w2v_data_loader(uris: List[str], in_sr: int, out_sr: int) -> Tuple[CustomDataset, Wav2Vec2Processor]:
+    """Creates CustomDataset with Wav2VecProcessor for using with Wav2VecForCTC
+
+    Parameters
+    ----------
+    uris : List[str]
+        Data to load into the dataset
+    ndim : int
+        Used to query DocArray's DocStore
+    in_sr : int
+        Raw audio sample rate
+    out_sr : int
+        Dataset sample rate
+
+    Returns
+    -------
+    Tuple[CustomDataset, Wav2Vec2Processor]
+        To be used for training Wav2VecForCTC
+    """
+    segment_dataset = SegmentDataset(uris, in_sr, out_sr)
     with open('/tmp/vocab.json', 'w') as f:
         json.dump(segment_dataset.vocab, f)
     tokenizer = Wav2Vec2CTCTokenizer("/tmp/vocab.json",
                                      unk_token=segment_dataset.unk_token,
                                      pad_token=segment_dataset.pad_token,
                                      word_delimiter_token=segment_dataset.word_delimiter_token)
-    feature_extractor = Wav2Vec2FeatureExtractor(feature_size=1, sampling_rate=16000, padding_value=0.0, do_normalize=True, return_attention_mask=False)
+    feature_extractor = Wav2Vec2FeatureExtractor(feature_size=1, sampling_rate=out_sr, padding_value=0.0, do_normalize=True, return_attention_mask=False)
     processor = Wav2Vec2Processor(feature_extractor=feature_extractor, tokenizer=tokenizer)
     _func = partial(prepare_dataset, processor=processor)
-    dataset = CustomDataset(uris, ndim, in_sr, out_sr, _func)
+    dataset = CustomDataset(uris, in_sr, out_sr, _func)
     return dataset, processor
 
 
@@ -106,29 +137,49 @@ class DataCollatorCTCWithPadding:
 def compute_metrics(pred, processor):
     pred_logits = pred.predictions
     pred_ids = np.argmax(pred_logits, axis=-1)
-
-    pred.label_ids[pred.label_ids == -100] = processor.tokenizer.pad_token_id
-
+    pred.label_ids[pred.label_ids == -100] = processor.tokenizer.pad_token_i
     pred_str = processor.batch_decode(pred_ids)
     # we do not want to group tokens when computing the metrics
     label_str = processor.batch_decode(pred.label_ids, group_tokens=False)
     wer_metric = load_metric("wer")
-
     wer = wer_metric.compute(predictions=pred_str, references=label_str)
-
     return {"wer": wer}
 
 
-def load_w2v(processor, checkpoint: str = "facebook/wav2vec2-base"):
+def load_w2v(processor: Wav2Vec2Processor, checkpoint: str = "facebook/wav2vec2-base") -> Wav2Vec2ForCTC:
+    """Loads Wav2VecForCTC with processor pad_token_id
+
+    Parameters
+    ----------
+    processor : Wav2Vec2Processor
+        Processor used in the dataset creation
+    checkpoint : str, optional
+        Path to model, by default "facebook/wav2vec2-base"
+
+    Returns
+    -------
+    Wav2Vec2ForCTC
+        Model
+    """
     return Wav2Vec2ForCTC.from_pretrained(
         checkpoint, 
         ctc_loss_reduction="mean", 
         pad_token_id=processor.tokenizer.pad_token_id)
 
 def get_data_collator(processor):
+    """Load data collator that will dynamically pad the inputs received."""
     return DataCollatorCTCWithPadding(processor=processor, padding=True)
 
-def load_trainer(model, data_collator, train_dataset, eval_dataset, processor, epochs: int = 10, freeze_features: bool = True, use_cuda: bool = False, output_dir: int ='checkpoint/'):
+def load_trainer(model: Wav2Vec2ForCTC,
+                 data_collator: DataCollatorCTCWithPadding,
+                 train_dataset: CustomDataset,
+                 eval_dataset: CustomDataset,
+                 processor: Wav2Vec2Processor,
+                 epochs: int = 10,
+                 freeze_features: bool = True,
+                 use_cuda: bool = False,
+                 output_dir: int ='checkpoint/') -> Trainer:
+    """Loads a trainer for Wav2VecForCTC from a CustomDataset"""
     if freeze_features:
         model.freeze_feature_extractor()
     fp16=False
@@ -162,12 +213,27 @@ def load_trainer(model, data_collator, train_dataset, eval_dataset, processor, e
         tokenizer=processor.feature_extractor,
     )
 
-def map_to_result(batch, model, processor):
+def map_to_result(batch: dict, model: Wav2Vec2ForCTC, processor: Wav2Vec2Processor) -> dict:
+    """Predict target text and add to batch
+
+    Parameters
+    ----------
+    batch : dict
+        Batch of inputs to predict
+    model : Wav2Vec2ForCTC
+        For prediction
+    processor : Wav2Vec2Processor
+        Used to decode model output
+
+    Returns
+    -------
+    dict
+        Batch with predictions as pred_str
+    """
     with torch.no_grad():
         input_values = torch.tensor(batch["input_values"], device="cuda").unsqueeze(0)
         logits = model(input_values).logits
     pred_ids = torch.argmax(logits, dim=-1)
     batch["pred_str"] = processor.batch_decode(pred_ids)[0]
     batch["text"] = processor.decode(batch["labels"], group_tokens=False)
-
     return batch

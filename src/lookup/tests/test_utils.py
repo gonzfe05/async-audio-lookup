@@ -54,7 +54,7 @@ def test__get_doc_by_uri(mocker):
 def test__get_array_by_uris(mocker):
     mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
     res = _get_array_by_uris(['1.wav', '2.wav'], 512, 'redis', {'a': 'b'})
-    assert res[0] == {'uri': {'$in': ['1.wav', '2.wav']}}
+    assert res == [{'uri': {'$eq': '1.wav'}}, {'uri': {'$eq': '2.wav'}}]
 
 def test__doc_audio_to_tensor(tmp_path):
     file_path = tmp_path / "1.wav"
