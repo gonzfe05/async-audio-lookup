@@ -230,10 +230,14 @@ def map_to_result(batch: dict, model: Wav2Vec2ForCTC, processor: Wav2Vec2Process
     dict
         Batch with predictions as pred_str
     """
-    with torch.no_grad():
-        input_values = torch.tensor(batch["input_values"], device="cuda").unsqueeze(0)
-        logits = model(input_values).logits
+    logits = get_logits(batch, model)
     pred_ids = torch.argmax(logits, dim=-1)
     batch["pred_str"] = processor.batch_decode(pred_ids)[0]
     batch["text"] = processor.decode(batch["labels"], group_tokens=False)
     return batch
+
+def get_logits(batch, model):
+    with torch.no_grad():
+        input_values = torch.tensor(batch["input_values"], device="cuda").unsqueeze(0)
+        logits = model(input_values).logits
+    return logits
