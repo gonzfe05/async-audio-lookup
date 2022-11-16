@@ -3,7 +3,7 @@ import time
 from typing import List, Optional
 from pydantic import BaseModel
 from lookup.doc_utils import add_docs as _add_docs, del_docs as _del_docs, _get_doc_by_uri, _doc_audio_to_tensor, _get_array_by_uris, _array_audio_to_tensor
-from lookup.wav2vec import get_data_collator, load_w2v, load_trainer, w2v_data_loader, get_logits
+from lookup.wav2vec import get_data_collator, load_w2v, load_trainer, w2v_data_loader, get_logits as _get_logits
 
 from uvicorn import Config
 
@@ -63,12 +63,16 @@ def train_encoder(docs: List[dict], checkpoint_path: str, in_sr: int, out_sr: in
     docs = [Doc.parse_obj(d) for d in docs]
     docs = [d for d in docs if d.tags.get('label')]
     uris = [d.uri for d in docs]
-    dataset, processor = w2v_data_loader(uris, in_sr, in_sr)
+    dataset, processor = w2v_data_loader(uris, in_sr, out_sr)
     model = load_w2v(processor)
     data_collator = get_data_collator(processor)
     trainer = load_trainer(model, data_collator, dataset, dataset, processor, epochs=1, output_dir = checkpoint_path)
     trainer.train()
     return trainer.state.log_history
+
+@celery.task(name="get_logits")
+def get_logits(batch, model, device: str = "cpu"):
+    return get_logits(batch['input_values'], model, device)
 
 
 @celery.task(name="get_doc_embeddings")

@@ -5,7 +5,7 @@ from docarray import DocumentArray, Document
 import librosa
 
 STORAGE = os.getenv('DOCARRAY_STORAGE_BACKEND')
-STORE_CONF = {'host': os.getenv('DOCARRAY_STORAGE_HOST'), 'port': os.getenv('DOCARRAY_STORAGE_PORT'), 'n_dim': int(os.getenv('DOCARRAY_NDIM')), 'index_name': os.getenv('DOCARRAY_STORAGE_INDEX'), 'columns': {'uri': 'str', 'label': 'str'}}
+STORE_CONF = {'host': os.getenv('DOCARRAY_STORAGE_HOST'), 'port': os.getenv('DOCARRAY_STORAGE_PORT'), 'n_dim': int(os.getenv('DOCARRAY_NDIM', 0)), 'index_name': os.getenv('DOCARRAY_STORAGE_INDEX'), 'columns': {'uri': 'str', 'label': 'str'}}
 
 
 def _extend_docstore(docs_kwargs: List[dict]):

@@ -1,8 +1,7 @@
-from cgitb import lookup
 import pytest
 from pydub.generators import WhiteNoise
 from lookup.doc_utils import Document
-from lookup.wav2vec import DataCollatorCTCWithPadding, get_data_collator, load_trainer, load_w2v, w2v_data_loader
+from lookup.wav2vec import DataCollatorCTCWithPadding, get_data_collator, load_trainer, load_w2v, w2v_data_loader, get_logits
 from transformers import Wav2Vec2ForCTC
 from transformers import Trainer
 # from torch import is_tensor
@@ -21,11 +20,11 @@ def test_w2v_data_loader(tmp_path, mocker):
         audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
         audio_segment.export(file_path, format='wav')
     labels = ['one thing', 'another', 'final']
-    def mock_doc_array(uris, n_dim):
+    def mock_doc_array(uris):
         return [Document(uri=i, tags={'label': labels[ix]}) for ix, i in enumerate(uris)]
     
     mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc_array)
-    dataset, _ = w2v_data_loader(uris, 512, 8000, 16000)
+    dataset, _ = w2v_data_loader(uris, 8000, 16000)
     for doc in dataset:
         assert len(doc['labels']) == len(doc['text'])
         assert doc['input_values'].shape == doc['audio']['array'].shape
@@ -63,14 +62,35 @@ def test_training_round(tmp_path, mocker):
     audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1000)
     audio_segment.export(file_path, format='wav')
     labels = ['one thing']*32
-    def mock_doc_array(uris, n_dim):
+    def mock_doc_array(uris):
         return [Document(uri=i, tags={'label': labels[ix]}) for ix, i in enumerate(uris)]
     # Create mock dataset by mocking the call to docstore
     mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc_array)
-    dataset, processor = w2v_data_loader(uris, 512, 8000, 16000)
+    dataset, processor = w2v_data_loader(uris, 8000, 16000)
     model = load_w2v(processor)
     data_collator = get_data_collator(processor)
     trainer = load_trainer(model, data_collator, dataset, dataset, processor, epochs=1,output_dir = tmp_path / 'checkpoint')
     trainer.train()
     assert len(trainer.state.log_history) == 1
     assert trainer.state.log_history[0]['epoch'] == 1
+
+
+def test_get_logits(tmp_path, mocker):
+    """
+    GIVEN an array of input values and a model
+    WHEN get_logits is called called
+    THEN we get the logits of the output
+    """
+    device = "cpu"
+    uri = f"{str(tmp_path)}/1.wav"
+    audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
+    audio_segment.export(uri, format='wav')
+    mock_doc = Document(uri=uri, tags={'label': 'one thing'})
+    mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc)
+    _, processor = w2v_data_loader(uri, 8000, 16000)
+    model = load_w2v(processor)
+    batch = processor(audio_segment)
+    logits = get_logits(batch['input_values'], model)
+    assert logits
+
+

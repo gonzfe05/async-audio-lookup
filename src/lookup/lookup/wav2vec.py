@@ -9,8 +9,8 @@ from transformers import Wav2Vec2ForCTC
 from transformers import TrainingArguments
 from transformers import Trainer
 from lookup.dataset import SegmentDataset, CustomDataset
-import torch
 from dataclasses import dataclass, field
+import torch
 import numpy as np
 from datasets import load_metric
 
@@ -236,8 +236,8 @@ def map_to_result(batch: dict, model: Wav2Vec2ForCTC, processor: Wav2Vec2Process
     batch["text"] = processor.decode(batch["labels"], group_tokens=False)
     return batch
 
-def get_logits(batch, model):
+def get_logits(input_values: np.ndarray, model: Wav2Vec2ForCTC, device: str = "cpu"):
     with torch.no_grad():
-        input_values = torch.tensor(batch["input_values"], device="cuda").unsqueeze(0)
+        input_values = torch.tensor(input_values, device=device).unsqueeze(0)
         logits = model(input_values).logits
     return logits
