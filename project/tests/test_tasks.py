@@ -1,12 +1,13 @@
 from pathlib import Path   
 import json
 from typing import List
+import numpy as np
 
 from unittest.mock import patch, call
 from pydub.generators import WhiteNoise
 from docarray import DocumentArray, Document
 from lookup.doc_utils import _get_da, _doc_audio_to_tensor
-from worker import create_task, add_docs, get_doc, del_docs, train_encoder , get_doc_audio, get_doc_array, array_audio_to_tensor
+from worker import create_task, add_docs, get_doc, del_docs, train_encoder , get_doc_audio, get_doc_array, array_audio_to_tensor, get_model_embeddings
 
 
 def test_home(test_app):
@@ -64,6 +65,15 @@ def test_array_audio_to_tensor():
     print(da.summary())
     assert [d.tensor for d in da]
     assert all(d.tensor.shape[0] > 0 for d in da)
+
+def test_get_model_embeddings():
+    doc1 = get_doc.run('aaa.wav')[0]
+    doc2 = get_doc.run('bbb.wav')[0]
+    doc3 = get_doc.run('ccc.wav')[0]
+    uris = [u.uri for u in [doc1, doc2, doc3]]
+    tensors = get_model_embeddings(uris, in_sr=8000, out_sr=16000)
+    tensors = np.array(tensors)
+    assert tensors.shape[-1] > 0
 
 def test_del_docs():
     doc = get_doc.run('aaa.wav')[0]

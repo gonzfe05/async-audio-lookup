@@ -238,6 +238,6 @@ def map_to_result(batch: dict, model: Wav2Vec2ForCTC, processor: Wav2Vec2Process
 
 def get_logits(input_values: np.ndarray, model: Wav2Vec2ForCTC, device: str = "cpu"):
     with torch.no_grad():
-        input_values = torch.tensor(input_values, device=device).unsqueeze(0)
+        input_values = torch.tensor(input_values, device=device)
         logits = model(input_values).logits
     return logits

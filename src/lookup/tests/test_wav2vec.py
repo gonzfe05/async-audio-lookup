@@ -1,10 +1,11 @@
 import pytest
 from pydub.generators import WhiteNoise
-from lookup.doc_utils import Document
+from lookup.doc_utils import Document, DocumentArray
 from lookup.wav2vec import DataCollatorCTCWithPadding, get_data_collator, load_trainer, load_w2v, w2v_data_loader, get_logits
 from transformers import Wav2Vec2ForCTC
 from transformers import Trainer
-# from torch import is_tensor
+from torch import is_tensor
+import numpy as np
 
 
 def test_w2v_data_loader(tmp_path, mocker):
@@ -75,7 +76,7 @@ def test_training_round(tmp_path, mocker):
     assert trainer.state.log_history[0]['epoch'] == 1
 
 
-def test_get_logits(tmp_path, mocker):
+def test_get_logits_single_doc(tmp_path, mocker):
     """
     GIVEN an array of input values and a model
     WHEN get_logits is called called
@@ -83,14 +84,40 @@ def test_get_logits(tmp_path, mocker):
     """
     device = "cpu"
     uri = f"{str(tmp_path)}/1.wav"
-    audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1)
+    audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1000)
     audio_segment.export(uri, format='wav')
-    mock_doc = Document(uri=uri, tags={'label': 'one thing'})
-    mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc)
-    _, processor = w2v_data_loader(uri, 8000, 16000)
+    def mock_doc_array(uri):
+        return [Document(uri=uri, tags={'label': 'one thing'})]
+    mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc_array)
+    dataset, processor = w2v_data_loader(uri, 8000, 16000)
     model = load_w2v(processor)
-    batch = processor(audio_segment)
-    logits = get_logits(batch['input_values'], model)
-    assert logits
+    collator = get_data_collator(processor)
+    inputs = collator(dataset)
+    logits = get_logits(inputs['input_values'], model, device)
+    assert is_tensor(logits)
 
+
+def test_get_logits_multiple_docs(tmp_path, mocker):
+    """
+    GIVEN an array of input values and a model
+    WHEN get_logits is called called
+    THEN we get the logits of the output
+    """
+    device = "cpu"
+    uri = f"{str(tmp_path)}/1.wav"
+    audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1000)
+    audio_segment.export(uri, format='wav')
+    uri = f"{str(tmp_path)}/2.wav"
+    audio_segment = WhiteNoise(sample_rate=8000).to_audio_segment(duration=1000)
+    audio_segment.export(uri, format='wav')
+    def mock_doc_array(uris):
+        return [Document(uri=uri, tags={'label': 'one thing'}) for uri in uris]
+    mock = mocker.patch('lookup.dataset._get_array_by_uris', mock_doc_array)
+    uris = [f"{str(tmp_path)}/1.wav", f"{str(tmp_path)}/2.wav"]
+    dataset, processor = w2v_data_loader(uris, 8000, 16000)
+    model = load_w2v(processor)
+    collator = get_data_collator(processor)
+    inputs = collator(dataset)
+    logits = get_logits(inputs['input_values'], model, device)
+    assert is_tensor(logits)
 

@@ -3,7 +3,7 @@ import time
 from typing import List, Optional
 from pydantic import BaseModel
 from lookup.doc_utils import add_docs as _add_docs, del_docs as _del_docs, _get_doc_by_uri, _doc_audio_to_tensor, _get_array_by_uris, _array_audio_to_tensor
-from lookup.wav2vec import get_data_collator, load_w2v, load_trainer, w2v_data_loader, get_logits as _get_logits
+from lookup.wav2vec import get_data_collator, load_w2v, load_trainer, w2v_data_loader, get_logits
 
 from uvicorn import Config
 
@@ -70,16 +70,11 @@ def train_encoder(docs: List[dict], checkpoint_path: str, in_sr: int, out_sr: in
     trainer.train()
     return trainer.state.log_history
 
-@celery.task(name="get_logits")
-def get_logits(batch, model, device: str = "cpu"):
-    return get_logits(batch['input_values'], model, device)
 
-
-@celery.task(name="get_doc_embeddings")
-def get_docs_embeddings(docs: List[dict], in_sr: int = 8000, out_sr: int = 16000):
-    raise NotImplementedError
-    docs = [Doc.parse_obj(d) for d in docs]
-    uris = [d.uri for d in docs]
-    dataset, processor = w2v_data_loader(uris, in_sr, in_sr)
+@celery.task(name="get_model_embeddings")
+def get_model_embeddings(uris: str, in_sr: int = 8000, out_sr: int = 16000):
+    dataset, processor = w2v_data_loader(uris, in_sr, out_sr)
     model = load_w2v(processor)
-    get_logits(dataset, )
+    collator = get_data_collator(processor)
+    inputs = collator(dataset)
+    return get_logits(inputs['input_values'], model, 'cpu')
