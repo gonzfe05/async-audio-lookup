@@ -6,13 +6,8 @@ import numpy as np
 from unittest.mock import patch, call
 from pydub.generators import WhiteNoise
 from docarray import DocumentArray, Document
+from worker import create_task, add_docs, get_doc, del_docs, train_encoder , get_doc_audio, get_doc_array, array_audio_to_tensor, get_model_embeddings, embed_docs
 from lookup.doc_utils import _get_da, _doc_audio_to_tensor
-from worker import create_task, add_docs, get_doc, del_docs, train_encoder , get_doc_audio, get_doc_array, array_audio_to_tensor, get_model_embeddings
-
-
-def test_home(test_app):
-    response = test_app.get("/")
-    assert response.status_code == 200
 
 
 def test_create_task():
@@ -74,6 +69,21 @@ def test_get_model_embeddings():
     tensors = get_model_embeddings(uris, in_sr=8000, out_sr=16000)
     tensors = np.array(tensors)
     assert tensors.shape[-1] > 0
+
+def test_embed_docs():
+    doc1 = get_doc.run('aaa.wav')[0]
+    doc2 = get_doc.run('bbb.wav')[0]
+    doc3 = get_doc.run('ccc.wav')[0]
+    uris = [u.uri for u in [doc1, doc2, doc3]]
+    embed_docs.run(uris)
+    da = get_doc_array(uris)
+    print("============== test_embed_docs ===============")
+    print(da.summary())
+    for d in da:
+        print(d.summary())
+        print(f"doc: {d}")
+        assert d.embeddings.shape[1] > 0
+
 
 def test_del_docs():
     doc = get_doc.run('aaa.wav')[0]

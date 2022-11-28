@@ -16,7 +16,7 @@ services:
       - DOCARRAY_STORAGE_HOST=redis
       - DOCARRAY_STORAGE_PORT=6379
       - DOCARRAY_STORAGE_INDEX=1
-      - DOCARRAY_NDIM=512
+      - DOCARRAY_NDIM=1568
     depends_on:
       - redis
 
@@ -32,7 +32,7 @@ services:
       - DOCARRAY_STORAGE_HOST=redis
       - DOCARRAY_STORAGE_PORT=6379
       - DOCARRAY_STORAGE_INDEX=1
-      - DOCARRAY_NDIM=512
+      - DOCARRAY_NDIM=1568
     depends_on:
       - web
       - redis

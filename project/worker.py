@@ -2,12 +2,20 @@ import os
 import time
 from typing import List, Optional
 from pydantic import BaseModel
-from lookup.doc_utils import add_docs as _add_docs, del_docs as _del_docs, _get_doc_by_uri, _doc_audio_to_tensor, _get_array_by_uris, _array_audio_to_tensor
+from lookup.doc_utils import add_docs as _add_docs, del_docs as _del_docs, _get_doc_by_uri, _doc_audio_to_tensor, _get_array_by_uris, _array_audio_to_tensor, embed_docs as _embed_docs
 from lookup.wav2vec import get_data_collator, load_w2v, load_trainer, w2v_data_loader, get_logits
 
 from uvicorn import Config
 
 from celery import Celery
+from celery.result import AsyncResult
+from celery.signals import after_setup_logger
+# import logging
+
+# from celery.utils.log import get_task_logger
+
+# logger = logging.getLogger(__name__)
+
 
 celery = Celery(__name__)
 celery.conf.broker_url = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379")
@@ -72,9 +80,17 @@ def train_encoder(docs: List[dict], checkpoint_path: str, in_sr: int, out_sr: in
 
 
 @celery.task(name="get_model_embeddings")
-def get_model_embeddings(uris: str, in_sr: int = 8000, out_sr: int = 16000):
+def get_model_embeddings(uris: List[str], in_sr: int = 8000, out_sr: int = 16000):
     dataset, processor = w2v_data_loader(uris, in_sr, out_sr)
     model = load_w2v(processor)
     collator = get_data_collator(processor)
     inputs = collator(dataset)
     return get_logits(inputs['input_values'], model, 'cpu')
+
+
+@celery.task(name="embed_docs")
+def embed_docs(uris: List[str]):
+    embeddings = get_model_embeddings.run(uris)
+    assert embeddings.shape[0] == len(uris)
+    # logger.info(f"embeddings: {embeddings.shape}")
+    _embed_docs(uris, embeddings)

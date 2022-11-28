@@ -31,30 +31,17 @@ class mockArray(object):
 def test_extend_docstore(mocker):
     mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
     docs = [{'uri': '1.wav'}, {'uri': '2.wav'}]
-    res = _extend_docstore('redis', {'example': 1}, docs)
+    res = _extend_docstore(docs)
     assert res == 2
 
 def test_add_doc(mocker):
     mock = mocker.patch('lookup.doc_utils._extend_docstore', return_value=None)
     uris = ['1.wav', '2.wav']
     labels = ['a', 'b']
-    _ = add_docs(uris, labels, 512, 'redis', {'example': 1})
-    mock.assert_called_once_with('redis',
-                                 {'example': 1, 'n_dim': 512},
-                                 [{'uri': '1.wav', 'tags': {'label': 'a'}},
-                                 {'uri': '2.wav', 'tags': {'label': 'b'}}
-                                 ]
-                                )
+    _ = add_docs(uris, labels)
+    mock.assert_called_once_with([{'tags': {'label': 'a', 'uri': '1.wav'}, 'uri': '1.wav'},
+                                  {'tags': {'label': 'b', 'uri': '2.wav'}, 'uri': '2.wav'}])
 
-def test__get_doc_by_uri(mocker):
-    mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
-    res = _get_doc_by_uri('1.wav', 512, 'redis', {'a': 'b'})
-    assert res[0] == {'uri': {'$eq': '1.wav'}}
-
-def test__get_array_by_uris(mocker):
-    mock = mocker.patch('lookup.doc_utils.DocumentArray', mockArray)
-    res = _get_array_by_uris(['1.wav', '2.wav'], 512, 'redis', {'a': 'b'})
-    assert res == [{'uri': {'$eq': '1.wav'}}, {'uri': {'$eq': '2.wav'}}]
 
 def test__doc_audio_to_tensor(tmp_path):
     file_path = tmp_path / "1.wav"
